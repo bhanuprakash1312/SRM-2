@@ -1,7 +1,14 @@
 import React from "react";
 import "./AgentPanel.css";
 
-const AgentPanel = ({ weatherData, newsData, trafficData, originConfigured }) => {
+const AgentPanel = ({
+  weatherData,
+  routeAlongWeather = [],
+  activeRouteInfo,
+  newsData,
+  trafficData,
+  originConfigured,
+}) => {
   let weatherActivity = "Awaiting coordinate data...";
   let weatherStatus = "Standby";
   let weatherHealth = 0;
@@ -25,11 +32,30 @@ const AgentPanel = ({ weatherData, newsData, trafficData, originConfigured }) =>
   if (weatherData?.origin || weatherData?.destination) {
     weatherStatus = "Active";
     weatherHealth = 100;
-    const getStr = (data, name) => data ? `${name}: ${Math.round(data.main.temp)}°C, ${data.weather[0].main}` : `${name}: --`;
-    weatherActivity = `${getStr(weatherData.origin, 'Origin')} | ${getStr(weatherData.destination, 'Dest')}`;
-    
-    // Pick the icon based on the origin condition, fallback to destination
-    const condition = weatherData?.origin?.weather?.[0]?.main || weatherData?.destination?.weather?.[0]?.main;
+    const getStr = (data, name) =>
+      data
+        ? `${name}: ${Math.round(data.main.temp)}°C, ${data.weather[0].main}`
+        : `${name}: --`;
+    let segments = `${getStr(weatherData.origin, "Origin")} | ${getStr(weatherData.destination, "Dest")}`;
+    if (routeAlongWeather.length > 0) {
+      const alongStr = routeAlongWeather
+        .map((row) =>
+          row.data
+            ? `${row.data.name || "route pt"}: ${Math.round(row.data.main.temp)}°C, ${row.data.weather[0].main}`
+            : null
+        )
+        .filter(Boolean)
+        .join(" · ");
+      if (alongStr) {
+        segments += ` | Along selected route: ${alongStr}`;
+      }
+    }
+    weatherActivity = segments;
+
+    const condition =
+      weatherData?.origin?.weather?.[0]?.main ||
+      weatherData?.destination?.weather?.[0]?.main ||
+      routeAlongWeather[0]?.data?.weather?.[0]?.main;
     weatherIcon = condition ? getWeatherIcon(condition) : "🌤️";
   }
 
@@ -58,17 +84,24 @@ const AgentPanel = ({ weatherData, newsData, trafficData, originConfigured }) =>
   let trafficHealth = 0;
 
   if (originConfigured) {
-     if (trafficData.risk > 0) {
-        trafficActivity = trafficData.risk >= 5 
-           ? `High Congestion / Routing Risk (Lv ${trafficData.risk})` 
-           : `Routing Optimal. Local risk: Lv ${trafficData.risk}`;
-        trafficStatus = trafficData.status;
-        trafficHealth = Math.max(10, 100 - (trafficData.risk * 10)); // simple inverse map
-     } else {
-        trafficActivity = "Analyzing surrounding vectors...";
-        trafficStatus = "Analyzing";
-        trafficHealth = 98;
-     }
+    const routeLabel =
+      activeRouteInfo && !activeRouteInfo.isOptimal
+        ? "Selected alternate route"
+        : activeRouteInfo
+          ? "Selected fastest route"
+          : "Selected route";
+    if (trafficData.risk > 0) {
+      trafficActivity =
+        trafficData.risk >= 5
+          ? `${routeLabel}: high risk / congestion (Lv ${trafficData.risk})`
+          : `${routeLabel}: low routing risk (Lv ${trafficData.risk})`;
+      trafficStatus = trafficData.status;
+      trafficHealth = Math.max(10, 100 - trafficData.risk * 10);
+    } else {
+      trafficActivity = "Analyzing route exposure from your selection…";
+      trafficStatus = "Analyzing";
+      trafficHealth = 98;
+    }
   }
 
   const agents = [
