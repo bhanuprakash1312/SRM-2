@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import MapComponent from "./components/MapComponent";
 import AgentPanel from "./components/AgentPanel";
 import AlertPanel from "./components/AlertPanel";
+import WeatherForecastPanel from "./components/WeatherForecastPanel";
 import "./App.css";
 
 function App() {
@@ -9,6 +10,7 @@ function App() {
   const [origin, setOrigin] = useState(null);
   const [destination, setDestination] = useState(null);
   const [weatherData, setWeatherData] = useState({ origin: null, destination: null });
+  const [weatherForecast, setWeatherForecast] = useState({ origin: null, destination: null });
   const [newsData, setNewsData] = useState(null);
   const [trafficData, setTrafficData] = useState({ risk: 0, status: "Standby" });
   const [activeAlerts, setActiveAlerts] = useState([]);
@@ -19,12 +21,12 @@ function App() {
       prev.map((alert) =>
         alert.id === id
           ? {
-              ...alert,
-              resolved: true,
-              severity: "info",
-              message: "Reroute executed successfully. Path secured and risks mitigated.",
-              type: "Risk Mitigated",
-            }
+            ...alert,
+            resolved: true,
+            severity: "info",
+            message: "Reroute executed successfully. Path secured and risks mitigated.",
+            type: "Risk Mitigated",
+          }
           : alert
       )
     );
@@ -32,12 +34,22 @@ function App() {
 
   const fetchWeather = async (lat, lon, type) => {
     try {
-      const apiKey = "d4dacbc0d7a74e15c38a5e54c1e990da";
+      const apiKey = "68991b161965035f444f0af5e443d4c0";
+      
+      // Current Weather
       const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
       const res = await fetch(url);
       const data = await res.json();
       if (data.cod === 200) {
         setWeatherData(prev => ({ ...prev, [type]: data }));
+      }
+
+      // 5-Day Forecast
+      const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
+      const forecastRes = await fetch(forecastUrl);
+      const forecastData = await forecastRes.json();
+      if (forecastData && forecastData.list) {
+        setWeatherForecast(prev => ({ ...prev, [type]: forecastData }));
       }
     } catch (err) {
       console.error("Weather fetch error", err);
@@ -66,7 +78,7 @@ function App() {
       // Define severe keywords that warrant a re-route
       const severeConditions = ["thunderstorm", "snow", "extreme", "tornado", "hurricane", "rain"];
       const isSevere = severeConditions.includes(condition) || data.main.temp > 40 || data.main.temp < -5;
-      
+
       if (isSevere) {
         setActiveAlerts(prev => {
           if (prev.some(a => a.type === `Severe Weather: ${locName}`)) return prev;
@@ -88,23 +100,23 @@ function App() {
 
   // 🚦 Dynamic Traffic/Delay Engine Callback
   const handleTrafficUpdate = useCallback((riskLevel) => {
-    setTrafficData({ 
-      risk: riskLevel, 
-      status: riskLevel >= 5 ? "Alert" : "Active" 
+    setTrafficData({
+      risk: riskLevel,
+      status: riskLevel >= 5 ? "Alert" : "Active"
     });
 
     if (riskLevel >= 5) {
-       setActiveAlerts(prev => {
-         if (prev.some(a => a.type.includes("Route Congestion"))) return prev;
-         return [{
-           id: Date.now() + Math.random(),
-           type: "Route Congestion Risk",
-           severity: riskLevel >= 8 ? "critical" : "warning",
-           message: `High risk parameter (Lv ${riskLevel}) detected on primary route indicating delays.`,
-           timestamp: "Just now",
-           resolved: false
-         }, ...prev];
-       });
+      setActiveAlerts(prev => {
+        if (prev.some(a => a.type.includes("Route Congestion"))) return prev;
+        return [{
+          id: Date.now() + Math.random(),
+          type: "Route Congestion Risk",
+          severity: riskLevel >= 8 ? "critical" : "warning",
+          message: `High risk parameter (Lv ${riskLevel}) detected on primary route indicating delays.`,
+          timestamp: "Just now",
+          resolved: false
+        }, ...prev];
+      });
     }
   }, []);
 
@@ -125,11 +137,11 @@ function App() {
       try {
         // Fetch targeted Google News RSS for each location
         const fetchPromises = locNames.map(loc => {
-           // Query: "CityName AND (war OR conflict OR strike OR protest OR storm OR disruption)"
-           const query = `"${loc}" AND (war OR conflict OR strike OR protest OR storm OR disruption)`;
-           const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
-           return fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
-             .then(res => res.json());
+          // Query: "CityName AND (war OR conflict OR strike OR protest OR storm OR disruption)"
+          const query = `"${loc}" AND (war OR conflict OR strike OR protest OR storm OR disruption)`;
+          const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+          return fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
+            .then(res => res.json());
         });
 
         // Fail-safe logic
@@ -174,7 +186,7 @@ function App() {
 
       } catch (err) {
         console.error("Local news fetch error or timeout:", err);
-        setNewsData({ status: "clear" }); 
+        setNewsData({ status: "clear" });
       }
     };
 
@@ -192,14 +204,14 @@ function App() {
           AI System Online
         </div>
       </header>
-      
+
       <aside className="sidebar">
         <AgentPanel weatherData={weatherData} newsData={newsData} trafficData={trafficData} originConfigured={!!origin} />
       </aside>
-      
+
       <main className="map-area">
-        <MapComponent 
-          forcedAlternative={forcedAlternative} 
+        <MapComponent
+          forcedAlternative={forcedAlternative}
           origin={origin}
           setOrigin={setOrigin}
           destination={destination}
@@ -211,6 +223,7 @@ function App() {
 
       <aside className="right-panel">
         <AlertPanel alerts={activeAlerts} onExecuteReroute={handleExecuteReroute} />
+        <WeatherForecastPanel forecast={weatherForecast} />
       </aside>
     </div>
   );
