@@ -1,7 +1,7 @@
 import React from "react";
 import "./AlertPanel.css";
 
-const AlertPanel = ({ alerts, onExecuteReroute }) => {
+const AlertPanel = ({ alerts, onExecuteReroute, hasAlternativeRoutes }) => {
   return (
     <div className="alert-container glass-panel">
       <div className="alert-header">
@@ -17,7 +17,7 @@ const AlertPanel = ({ alerts, onExecuteReroute }) => {
               <span className="alert-time">{alert.timestamp}</span>
             </div>
             <p className="alert-message">{alert.message}</p>
-            {alert.severity === "critical" && !alert.resolved && (
+            {alert.severity === "critical" && !alert.resolved && hasAlternativeRoutes && (
               <button 
                 className="re-route-btn" 
                 onClick={() => onExecuteReroute(alert.id)}

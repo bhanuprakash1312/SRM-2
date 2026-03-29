@@ -71,6 +71,21 @@ function getDistanceKm(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
+function getPerturbedMidpoint(lat1, lon1, lat2, lon2, offsetKm) {
+  const midLat = (lat1 + lat2) / 2;
+  const midLon = (lon1 + lon2) / 2;
+  const dLat = lat2 - lat1;
+  const dLon = lon2 - lon1;
+  const len = Math.sqrt(dLat * dLat + dLon * dLon);
+  if (len === 0) return [midLat, midLon];
+  const nLat = -dLon / len;
+  const nLon = dLat / len;
+  // Account for longitude shrinking
+  const offsetDegLat = offsetKm / 111.0;
+  const offsetDegLon = (offsetKm / 111.0) / Math.max(0.1, Math.cos((midLat * Math.PI) / 180));
+  return [midLat + nLat * offsetDegLat, midLon + nLon * offsetDegLon];
+}
+
 async function fetchORSRoutes(pointsLatLng, calculateRisk) {
   if (!pointsLatLng?.length || pointsLatLng.length < 2) return null;
 
@@ -87,9 +102,9 @@ async function fetchORSRoutes(pointsLatLng, calculateRisk) {
     instructions: false,
   };
 
-  if (estimatedDistance < 100 && pointsLatLng.length === 2) {
+  if (pointsLatLng.length === 2) {
     body.alternative_routes = {
-      target_count: 2,
+      target_count: 3,
       share_factor: 0.6,
     };
   }
@@ -116,6 +131,44 @@ async function fetchORSRoutes(pointsLatLng, calculateRisk) {
       body: JSON.stringify(body),
     });
     data = await response.json();
+
+    // 🔹 SYNTHETIC ALTERNATIVE FOR LONG DISTANCES
+    if (data.routes && data.routes.length > 0 && pointsLatLng.length === 2) {
+      const [oLat, oLon] = pointsLatLng[0];
+      const [dLat, dLon] = pointsLatLng[1];
+      
+      // Calculate a waypoint offset by ~150km to force a different path
+      const [mLat, mLon] = getPerturbedMidpoint(oLat, oLon, dLat, dLon, 150);
+
+      const altBody = {
+        coordinates: [
+          [oLon, oLat],
+          [mLon, mLat],
+          [dLon, dLat]
+        ],
+        radiuses: [-1, -1, -1], // unrestricted snapping
+        instructions: false,
+      };
+
+      try {
+        const altRes = await fetch(ORS_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: ORS_API_KEY,
+          },
+          body: JSON.stringify(altBody)
+        });
+        const altData = await altRes.json();
+        
+        // If successful, push it to the main routes returned!
+        if (altData.routes && altData.routes.length > 0) {
+           data.routes.push(altData.routes[0]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch synthetic alternative", err);
+      }
+    }
   }
 
   if (!data.routes) return null;
@@ -483,6 +536,7 @@ const MapComponent = ({
     const samples = samplePolylinePoints(route.geometry, 3);
     onActiveRouteChange?.({
       index: bestRouteIndex,
+      totalRoutes: routes.length,
       isOptimal,
       risk: route.risk,
       summary: route.summary,

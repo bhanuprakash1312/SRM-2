@@ -71,6 +71,7 @@ function App() {
     }
     setActiveRouteInfo({
       index: info.index,
+      totalRoutes: info.totalRoutes,
       isOptimal: info.isOptimal,
       risk: info.risk,
       distanceM: info.summary?.distance,
@@ -318,7 +319,11 @@ function App() {
       </main>
 
       <aside className="right-panel">
-        <AlertPanel alerts={activeAlerts} onExecuteReroute={handleExecuteReroute} />
+        <AlertPanel 
+          alerts={activeAlerts} 
+          onExecuteReroute={handleExecuteReroute} 
+          hasAlternativeRoutes={activeRouteInfo?.totalRoutes > 1} 
+        />
         <WeatherForecastPanel forecast={weatherForecast} />
       </aside>
 
