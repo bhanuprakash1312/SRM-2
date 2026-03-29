@@ -171,6 +171,57 @@ async function fetchORSRoutes(pointsLatLng, calculateRisk) {
     }
   }
 
+  // Artificial alternative pathway for large routes where ORS native fails
+  if (data.routes && data.routes.length === 1 && pointsLatLng.length === 2 && estimatedDistance >= 100) {
+    try {
+      const srcLat = pointsLatLng[0][0];
+      const srcLon = pointsLatLng[0][1];
+      const dstLat = pointsLatLng[1][0];
+      const dstLon = pointsLatLng[1][1];
+
+      const midLat = (srcLat + dstLat) / 2;
+      const midLon = (srcLon + dstLon) / 2;
+      
+      const dLat = dstLat - srcLat;
+      const dLon = dstLon - srcLon;
+
+      const latRad = midLat * (Math.PI / 180);
+      const cosLat = Math.cos(latRad) || 1;
+
+      const perpLat = -dLon * cosLat;
+      const perpLon = dLat / cosLat;
+      
+      const offsetScale = 0.15; // 15% perpendicular deviation 
+      const wpLat = midLat + perpLat * offsetScale;
+      const wpLon = midLon + perpLon * offsetScale;
+
+      const altBody = {
+        coordinates: [
+          [srcLon, srcLat],
+          [wpLon, wpLat],
+          [dstLon, dstLat]
+        ],
+        instructions: false,
+      };
+
+      const altResponse = await fetch(ORS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: ORS_API_KEY,
+        },
+        body: JSON.stringify(altBody),
+      });
+
+      const altData = await altResponse.json();
+      if (altData.routes && altData.routes.length > 0) {
+        data.routes.push(altData.routes[0]);
+      }
+    } catch (err) {
+      console.error("Failed fetching artificial alternative", err);
+    }
+  }
+
   if (!data.routes) return null;
 
   return data.routes.map((route) => {

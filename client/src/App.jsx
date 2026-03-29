@@ -216,7 +216,7 @@ function App() {
 
       try {
         // Fetch targeted Google News RSS for each location
-        const fetchPromises = locNames.map(loc => {
+        const fetchPromises = locNames.map(async loc => {
            // Query: "CityName AND (war OR conflict OR strike OR protest OR storm OR disruption)"
            const query = `"${loc}" AND (war OR conflict OR strike OR protest OR storm OR disruption)`;
            const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
